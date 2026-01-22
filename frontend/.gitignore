@@ -66,3 +66,10 @@ coverage/
 .env.development.local
 .env.test.local
 .env.production.local
+# Node
+node_modules/
+
+# Environment files
+.env
+frontend/.env
+backend/.env

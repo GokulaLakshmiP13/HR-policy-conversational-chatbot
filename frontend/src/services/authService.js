@@ -1,44 +1,36 @@
 
+const API_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/auth/otp';
 
 const authService = {
     /**
-     * Check configuration and initialize EmailJS
-     * @returns {boolean} true if valid
-     */
-    /**
      * Initialize Auth Service
-     * (In demo mode, this is a no-op but kept for API consistency)
-     * @returns {boolean} always true
      */
     init() {
-        console.log("🔧 Auth Service Initialized (DEMO MODE)");
+        console.log("🔧 Auth Service Initialized (Backend Mode)");
         return true;
     },
 
     /**
-     * Request OTP for the given email (DEMO MODE)
-     * Generates a random OTP and logs it to the console.
+     * Request OTP for the given email
      * @param {string} email
      * @returns {Promise<void>}
      */
     async sendOtp(email) {
-        // Simulate network delay
-        await new Promise(resolve => setTimeout(resolve, 800));
+        try {
+            const response = await fetch(`${API_URL}/request`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            });
 
-        // 1. Generate random 6-digit OTP
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        const expiry = Date.now() + 5 * 60 * 1000; // 5 minutes from now
-
-        // 2. Store in sessionStorage (Client-side temporary storage)
-        sessionStorage.setItem("auth_otp", otp);
-        sessionStorage.setItem("auth_otp_expiry", expiry.toString());
-        sessionStorage.setItem("auth_email", email);
-
-        // 3. Log OTP to console for user to see
-        console.group("🔐 DEMO OTP GENERATED");
-        console.log(`%cOTP for ${email}: ${otp}`, "color: #4ade80; font-weight: bold; font-size: 14px;");
-        console.log("Please enter this code in the login screen.");
-        console.groupEnd();
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to send OTP');
+            }
+        } catch (error) {
+            console.error("Send OTP Error:", error);
+            throw error;
+        }
     },
 
     /**
@@ -48,54 +40,36 @@ const authService = {
      * @returns {Promise<{token: string, user: object}>}
      */
     async verifyOtp(email, otp) {
-        return new Promise((resolve, reject) => {
-            // Simulate API delay
-            setTimeout(() => {
-                const storedOtp = sessionStorage.getItem("auth_otp");
-                const storedExpiry = sessionStorage.getItem("auth_otp_expiry");
-                const storedEmail = sessionStorage.getItem("auth_email");
+        try {
+            const response = await fetch(`${API_URL}/verify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, otp })
+            });
 
-                // 1. Validate existence
-                if (!storedOtp || !storedExpiry || !storedEmail) {
-                    reject(new Error("OTP session invalid or expired. Please request a new OTP."));
-                    return;
-                }
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Invalid OTP');
+            }
 
-                // 2. Validate Email
-                if (email !== storedEmail) {
-                    reject(new Error("Email mismatch. Please start over."));
-                    return;
-                }
+            const data = await response.json();
 
-                // 3. Validate Expiry
-                if (Date.now() > parseInt(storedExpiry, 10)) {
-                    sessionStorage.removeItem("auth_otp"); // Clean up
-                    reject(new Error("OTP has expired. Please request a new one."));
-                    return;
-                }
+            // Enrich user object with placeholders since backend DB isn't ready
+            const enrichedUser = {
+                ...data.user,
+                name: data.user.email.split('@')[0], // Derive name from email
+                role: "user",
+                employeeId: "EMP-PENDING"
+            };
 
-                // 4. Validate OTP
-                if (otp !== storedOtp) {
-                    reject(new Error("Invalid OTP. Please try again."));
-                    return;
-                }
-
-                // 5. Success - Clear OTP and return mock session
-                sessionStorage.removeItem("auth_otp");
-                sessionStorage.removeItem("auth_otp_expiry");
-                sessionStorage.removeItem("auth_email");
-
-                resolve({
-                    token: "mock-jwt-token-12345",
-                    user: {
-                        email: email,
-                        name: "sriram", // Backend-ready: Will be populated from API
-                        role: "user",
-                        employeeId: "EMP0001" // Backend-ready: This will come from API
-                    }
-                });
-            }, 800);
-        });
+            return {
+                token: data.token,
+                user: enrichedUser
+            };
+        } catch (error) {
+            console.error("Verify OTP Error:", error);
+            throw error;
+        }
     },
 
     /**
@@ -107,12 +81,5 @@ const authService = {
         sessionStorage.clear();
     }
 };
-
-// Attempt verification on load, but don't crash
-try {
-    authService.init();
-} catch (e) {
-    console.warn("Auto-initialization check failed", e);
-}
 
 export default authService;
